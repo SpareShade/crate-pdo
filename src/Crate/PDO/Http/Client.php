@@ -31,87 +31,88 @@ use GuzzleHttp\Exception\ParseException;
 
 class Client implements ClientInterface
 {
-    /**
-     * @var HttpClient
-     */
-    private $client;
+	/**
+	 * @var HttpClient
+	 */
+	private $client;
 
-    /**
-     * @param string $uri
-     * @param array  $options
-     */
-    public function __construct($uri, array $options)
-    {
-        $this->client = new HttpClient(['base_url' => $uri] + $options);
-    }
+	/**
+	 * @param string $uri
+	 * @param array  $options
+	 */
+	public function __construct($uri, array $options)
+	{
+		$this->client = new HttpClient(['base_uri' => $uri] + $options);
+	}
 
-    /**
-     * {@Inheritdoc}
-     */
-    public function execute($query, array $parameters)
-    {
-        $body = [
-            'stmt' => $query,
-            'args' => $parameters
-        ];
+	/**
+	 * {@Inheritdoc}
+	 */
+	public function execute($query, array $parameters)
+	{
+		$body = [
+			'stmt' => $query,
+			'args' => $parameters
+		];
 
-        try {
-            $response     = $this->client->post(null, ['json' => $body]);
-            $responseBody = $response->json();
+		try {
+			$response     = $this->client->post(null, ['json' => $body]);
+			$responseBody = json_decode($response->getBody(), true);
 
-            return new Collection(
-                $responseBody['rows'],
-                $responseBody['cols'],
-                $responseBody['duration'],
-                $responseBody['rowcount']
-            );
+			return new Collection(
+				$responseBody['rows'],
+				$responseBody['cols'],
+				$responseBody['duration'],
+				$responseBody['rowcount']
+			);
 
-        } catch (BadResponseException $exception) {
+		} catch (BadResponseException $exception) {
+		
+			throw $exception;
+			try {
 
-            try {
+				$json = $exception->getResponse()->getBody();
 
-                $json = $exception->getResponse()->json();
+				$errorCode    = $json['error']['code'];
+				$errorMessage = $json['error']['message'];
 
-                $errorCode    = $json['error']['code'];
-                $errorMessage = $json['error']['message'];
+				throw new RuntimeException($errorMessage, $errorCode);
 
-                throw new RuntimeException($errorMessage, $errorCode);
+			} catch (ParseException $e) {
+				throw new RuntimeException('Unparsable response from server', 0, $exception);
+			}
+		}
+	}
 
-            } catch (ParseException $e) {
-                throw new RuntimeException('Unparsable response from server', 0, $exception);
-            }
-        }
-    }
+	/**
+	 * {@Inheritdoc}
+	 */
+	public function getServerInfo()
+	{
+		throw new UnsupportedException('Not yet implemented');
+	}
 
-    /**
-     * {@Inheritdoc}
-     */
-    public function getServerInfo()
-    {
-        throw new UnsupportedException('Not yet implemented');
-    }
+	/**
+	 * {@Inheritdoc}
+	 */
+	public function getServerVersion()
+	{
+		throw new UnsupportedException('Not yet implemented');
+	}
 
-    /**
-     * {@Inheritdoc}
-     */
-    public function getServerVersion()
-    {
-        throw new UnsupportedException('Not yet implemented');
-    }
+	/**
+	 * {@Inheritdoc}
+	 */
+	public function setTimeout($timeout)
+	{
+		$this->client->setDefaultOption('timeout', (float) $timeout);
+	}
 
-    /**
-     * {@Inheritdoc}
-     */
-    public function setTimeout($timeout)
-    {
-        $this->client->setDefaultOption('timeout', (float) $timeout);
-    }
-
-    /**
-     * {@Inheritdoc}
-     */
-    public function setHttpBasicAuth($username, $passwd)
-    {
-        $this->client->setDefaultOption('auth', [$username, $passwd]);
-    }
+	/**
+	 * {@Inheritdoc}
+	 */
+	public function setHttpBasicAuth($username, $passwd)
+	{
+		$this->client->setDefaultOption('auth', [$username, $passwd]);
+	}
 }
